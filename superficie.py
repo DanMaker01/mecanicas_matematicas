@@ -5,7 +5,7 @@ import numpy as np
 # WaveField
 # -----------------------------
 class WaveField:
-    def __init__(self, N, c=2.9, dt=0.1, alpha=0.0, damping=0.990):
+    def __init__(self, N, c=5, dt=0.1, alpha=0.0, damping=0.99):
         self.N = N
         self.c = c
         self.dt = dt
@@ -38,7 +38,7 @@ class WaveField:
 # Player
 # -----------------------------
 class Player:
-    def __init__(self, N, intensity=1.0, speed=1.0):
+    def __init__(self, N, intensity=10.0, speed=1.0):
         self.N = N
         self.x = N / 4
         self.y = N / 4
@@ -46,11 +46,12 @@ class Player:
         self.intensity = intensity
         self.speed = speed
         self.hidden = False
+        self.bomb_cooldown = 0
 
     def update(self, wavefield, keys):
         if self.hidden:
             self.hidden = False
-            
+
         dx, dy = 0.0, 0.0
         self.intensity = self.original_intensity
 
@@ -70,17 +71,19 @@ class Player:
         col = int(round(self.x))
         row = int(round(self.y))
         
-        # :if not self.hidden:
-        wavefield.u[row, col] = self.intensity
-        col = int(round(self.x))
-        row = int(round(self.y))
         if keys[pygame.K_SPACE]: 
             self.hidden = True
-            wavefield.u[row, col] += -self.intensity
+            # wavefield.u[row, col] += -self.intensity
+        else:
+            wavefield.u[row, col] = self.intensity
         
-        if self.hidden and not keys[pygame.K_SPACE]:
-            wavefield.u[row,col] += -10*self.intensity
-
+        if self.bomb_cooldown <= 0:
+            if keys[pygame.K_RETURN]:
+                wavefield.u[row,col] += 50*self.intensity
+                self.bomb_cooldown = 20
+        else:
+            self.bomb_cooldown -= 1
+            # print("cooldown:",self.bomb_cooldown)
 # -----------------------------
 # Visualizador 3D otimizado com projeção isométrica corrigida
 # -----------------------------
@@ -202,8 +205,8 @@ class Visualizer3D:
             
             if not player.hidden:
                 # Círculo vermelho com brilho
-                pygame.draw.circle(self.screen, (255, 0, 0), (screen_x, screen_y), 6)
-                pygame.draw.circle(self.screen, (255, 100, 100), (screen_x-1, screen_y-1), 3)
+                # pygame.draw.circle(self.screen, (255, 0, 0), (screen_x, screen_y), 6)
+                # pygame.draw.circle(self.screen, (255, 100, 100), (screen_x-1, screen_y-1), 3)
                 # Pequeno rastro
                 for dx, dy in [(-1,0), (1,0), (0,-1), (0,1)]:
                     nx, ny = screen_x + dx, screen_y + dy
@@ -211,9 +214,13 @@ class Visualizer3D:
                         self.screen.set_at((nx, ny), (100, 0, 0))
             else:
                 pygame.draw.circle(self.screen, (100, 255, 100), (screen_x, screen_y), 4)
+
+
+        # self._draw_hud(player)
         
-        pygame.display.flip()
     
+
+
     def _draw_axes(self):
         """Desenha eixos de referência"""
         # Eixo X (vermelho)
@@ -236,6 +243,7 @@ class Visualizer3D:
 # -----------------------------
 class WavePipeline:
     def __init__(self, screen, N=100):
+        # self.wavefield = WaveField(N, c= 12.0, damping=0.11)
         self.wavefield = WaveField(N)
         self.player = Player(N)
         self.visualizer = Visualizer3D(screen, N, scale_3d=8.0)
@@ -267,6 +275,31 @@ class WavePipeline:
             self.wavefield.step()
             self.visualizer.render(self.wavefield.u, self.player)
 
+            self._draw_hud(screen)
+            
+            pygame.display.flip()
+
+    def _draw_hud(self,screen):
+        """Draws HUD with game information"""
+        font = pygame.font.Font(None, 24)
+        
+        row = int(round(self.player.y))
+        col = int(round(self.player.x))
+
+        player_pos_text = f"Player: ({self.player.x}, {self.player.y})"
+        intensity_text = f"Intensity: {self.wavefield.u[row,col]}"
+        cooldown_text = f"Bomb CD: {self.player.bomb_cooldown}"
+        
+        texts = [player_pos_text, intensity_text, cooldown_text]
+        
+        for i, text in enumerate(texts):
+            surface = font.render(text, True, (255, 255, 255))
+            screen.blit(surface, (10, 10 + i * 30))
+            
+
+            
+
+    
     def add_wave_at_mouse(self, mouse_pos):
         x_mouse, y_mouse = mouse_pos
         
@@ -274,7 +307,7 @@ class WavePipeline:
         grid_x, grid_y = self.visualizer.screen_to_grid(x_mouse, y_mouse)
         
         # Adicionar onda com intensidade
-        self.wavefield.u[grid_y, grid_x] += 3.0
+        self.wavefield.u[grid_y, grid_x] += 4.0
         
         # Feedback visual (opcional)
         print(f"Mouse em ({x_mouse}, {y_mouse}) -> Grid ({grid_x}, {grid_y})")
